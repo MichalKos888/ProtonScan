@@ -1,0 +1,25 @@
+# === SECRETS — never commit these ===
+.env
+*.env
+
+# === Python ===
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# === Node (leftover or future) ===
+node_modules/
+dist/
+.vite/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === Editor ===
+.vscode/settings.json
+.idea/
+*.swp
