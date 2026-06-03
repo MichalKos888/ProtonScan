@@ -39,6 +39,11 @@ async def resolve_steam_id(client: httpx.AsyncClient, raw: str) -> str:
     raise HTTPException(400, "Steam profile not found. Check the ID/URL and make sure the profile is Public.")
 
 
+_PROTONDB_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0",
+}
+
+
 async def fetch_tier(client: httpx.AsyncClient, app_id: int, sem: asyncio.Semaphore) -> dict:
     if app_id in _tier_cache:
         return _tier_cache[app_id]
@@ -46,15 +51,25 @@ async def fetch_tier(client: httpx.AsyncClient, app_id: int, sem: asyncio.Semaph
         try:
             r = await client.get(
                 f"https://www.protondb.com/api/v1/reports/summaries/{app_id}.json",
+                headers=_PROTONDB_HEADERS,
                 timeout=8.0,
             )
-            result = (
-                {"tier": r.json().get("tier", "unknown"), "reports": r.json().get("total", 0)}
-                if r.status_code == 200
-                else {"tier": "unknown", "reports": 0}
-            )
+            if r.status_code == 200:
+                d = r.json()
+                raw_tier = d.get("tier", "")
+                # Fall back to bestReportedTier when tier is "pending" (few reports)
+                # — matches what ProtonDB's website displays.
+                if not raw_tier or raw_tier == "pending":
+                    raw_tier = d.get("bestReportedTier", "unknown")
+                result = {"tier": raw_tier or "unknown", "reports": d.get("total", 0)}
+            elif r.status_code == 404:
+                result = {"tier": "unknown", "reports": 0}
+            else:
+                # Rate-limited or server error — don't cache so next scan can retry.
+                return {"tier": "unknown", "reports": 0}
         except Exception:
-            result = {"tier": "unknown", "reports": 0}
+            # Network/timeout error — don't cache.
+            return {"tier": "unknown", "reports": 0}
     _tier_cache[app_id] = result
     return result
 

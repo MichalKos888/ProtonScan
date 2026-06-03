@@ -4,38 +4,36 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ProtonScan — Linux Compatibility Portal</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts used by the three themes -->
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { background: #16110c; }
-      body { overflow-x: hidden; }
-      @keyframes spin { to { transform: rotate(360deg); } }
-      @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      html, body, #root { height: 100%; }
+      body { overflow: hidden; }
+      @keyframes spin  { to { transform: rotate(360deg); } }
+      @keyframes psUp  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     </style>
   </head>
   <body>
     <div id="root"></div>
 
-    <script
-      src="https://unpkg.com/react@18.3.1/umd/react.development.js"
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"
       integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L"
-      crossorigin="anonymous"
-    ></script>
-    <script
-      src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"
+      crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"
       integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm"
-      crossorigin="anonymous"
-    ></script>
-    <script
-      src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"
+      crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"
       integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y"
-      crossorigin="anonymous"
-    ></script>
+      crossorigin="anonymous"></script>
 
     <script src="protonscan/ps-data.js"></script>
     <script type="text/babel" src="protonscan/ps-app.jsx"></script>
+
+    <!-- Mount the app — change themeKey to "hearth" or "ember" to switch themes -->
+    <script type="text/babel">
+      const _root = ReactDOM.createRoot(document.getElementById("root"));
+      _root.render(<ProtonScan themeKey="latte" />);
+    </script>
   </body>
 </html>

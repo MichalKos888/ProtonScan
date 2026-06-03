@@ -1,0 +1,6 @@
+name            = "proton-portal-api"
+main            = "worker.js"
+compatibility_date = "2026-01-01"
+
+# STEAM_API_KEY is stored as an encrypted secret — never put it here.
+# Set it once with:  wrangler secret put STEAM_API_KEY
