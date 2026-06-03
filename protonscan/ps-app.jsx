@@ -146,7 +146,7 @@ const ShieldIcon = ({ s = 12 }) => (
 
 function TierChip({ tier, small }) {
   const t = useTheme();
-  const c = TIER_COLOR[tier];
+  const c = TIER_COLOR[tier] || TIER_COLOR.unknown;
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: small ? 4 : 5,
@@ -164,7 +164,7 @@ function GameCard({ game }) {
   const t = useTheme();
   const [hov, setHov] = useState(false);
   const [err, setErr] = useState(false);
-  const c = TIER_COLOR[game.tier];
+  const c = TIER_COLOR[game.tier] || TIER_COLOR.unknown;
 
   return (
     <a href={pdbUrl(game.id)} target="_blank" rel="noopener noreferrer"
@@ -195,7 +195,7 @@ function GameCard({ game }) {
         {/* persistent tier badge */}
         <div style={{ position: "absolute", top: 10, right: 10, background: t.bg + "e6", borderRadius: 999, padding: "3px 9px 3px 7px", border: `1px solid ${c}55`, backdropFilter: "blur(4px)", display: "inline-flex", alignItems: "center", gap: 5 }}>
           <TierIcon tier={game.tier} size={11} color={c} />
-          <span style={{ fontSize: 10.5, fontWeight: 700, color: c, letterSpacing: 0.3 }}>{TT[game.tier].label}</span>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: c, letterSpacing: 0.3 }}>{(TT[game.tier] || TT.unknown).label}</span>
         </div>
 
         {/* hover overlay */}
@@ -205,7 +205,7 @@ function GameCard({ game }) {
           background: `linear-gradient(to top, ${t.bg}f7 8%, ${t.bg}b0 48%, transparent 92%)`,
           opacity: hov ? 1 : 0, transition: "opacity .25s",
         }}>
-          <div style={{ fontSize: 12.5, color: t.text, lineHeight: 1.45 }}>{TT[game.tier].desc}</div>
+          <div style={{ fontSize: 12.5, color: t.text, lineHeight: 1.45 }}>{(TT[game.tier] || TT.unknown).desc}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 11.5, color: t.textDim, marginTop: 2 }}>
             <span>{fmtNum(game.rep)} reports</span>
             {game.pt > 0 && <span>{fmtHrs(game.pt)} played</span>}
@@ -366,9 +366,24 @@ function Spinner({ mode }) {
     <div style={{ textAlign: "center", padding: "96px 0" }}>
       <div style={{ width: 34, height: 34, margin: "0 auto 20px", border: `3px solid ${t.border}`, borderTopColor: t.accent, borderRadius: "50%", animation: "spin .8s linear infinite" }} />
       <div style={{ fontSize: 14, fontWeight: 600, color: t.textDim }}>
-        {mode === "library" ? "Fetching your library & ProtonDB tiers…" : "Searching the Steam store…"}
+        {mode === "library" ? "Fetching your Steam library…" : "Searching the Steam store…"}
       </div>
-      {mode === "library" && <div style={{ fontSize: 12.5, color: t.textMuted, marginTop: 7 }}>Large libraries can take up to a minute.</div>}
+    </div>
+  );
+}
+
+function TierProgress({ done, total }) {
+  const t = useTheme();
+  const pct = total ? Math.round(done / total * 100) : 0;
+  return (
+    <div style={{ marginBottom: 18, background: t.panel, border: `1px solid ${t.border}`, borderRadius: t.radius, padding: "11px 16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7, fontSize: 12, color: t.textDim }}>
+        <span>Loading compatibility tiers…</span>
+        <span style={{ color: t.textMuted, fontVariantNumeric: "tabular-nums" }}>{done} / {total}</span>
+      </div>
+      <div style={{ height: 4, background: t.panel2, borderRadius: 3, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: t.accent, borderRadius: 3, transition: "width .35s ease" }} />
+      </div>
     </div>
   );
 }
@@ -429,25 +444,68 @@ function ProtonScan({ themeKey = "hearth", demo = false }) {
   const [games, setGames] = useState(demo ? sortByTier(GAMES) : []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [progress, setProgress] = useState(null); // { done, total } while fetching tiers
 
-  const resetTo = m => { setMode(m); setTier("all"); setFilter(""); setInput(""); if (!demo) { setGames([]); setError(null); } };
+  const resetTo = m => {
+    setMode(m); setTier("all"); setFilter(""); setInput("");
+    if (!demo) { setGames([]); setError(null); setProgress(null); }
+  };
 
   const submit = async () => {
     if (demo || loading || !input.trim()) return;
-    setLoading(true); setError(null); setGames([]); setTier("all");
+    setLoading(true); setError(null); setGames([]); setTier("all"); setProgress(null);
+    const base = (window.PROTON_CONFIG || {}).apiBase || "";
+
+    if (mode === "search") {
+      try {
+        const res = await fetch(`${base}/search?q=${encodeURIComponent(input.trim())}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Request failed");
+        setGames(sortByTier((data.games || []).map(normGame)));
+      } catch (e) {
+        setError(e.message || "Something went wrong.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Library mode: fetch game list first, then enrich tiers progressively.
+    // Each /tier/:id call is a separate Worker request (1 subrequest each),
+    // so there's no free-plan subrequest cap to worry about.
     try {
-      const base = (window.PROTON_CONFIG || {}).apiBase || "";
-      const url = mode === "library"
-        ? `${base}/games/${encodeURIComponent(input.trim())}`
-        : `${base}/search?q=${encodeURIComponent(input.trim())}`;
-      const res = await fetch(url);
+      const res = await fetch(`${base}/games/${encodeURIComponent(input.trim())}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Request failed");
-      setGames(sortByTier((data.games || []).map(normGame)));
-    } catch (e) {
-      setError(e.message || "Something went wrong.");
-    } finally {
+      const list = (data.games || []).map(normGame);
       setLoading(false);
+      setGames(list);
+      setProgress({ done: 0, total: list.length });
+
+      const BATCH = 15;
+      for (let i = 0; i < list.length; i += BATCH) {
+        const batch = list.slice(i, i + BATCH);
+        const enriched = await Promise.all(batch.map(async g => {
+          try {
+            const r = await fetch(`${base}/tier/${g.id}`);
+            if (r.ok) {
+              const td = await r.json();
+              return { ...g, tier: td.tier || "unknown", reports: td.reports || 0 };
+            }
+          } catch {}
+          return g;
+        }));
+        setGames(prev => {
+          const map = new Map(enriched.map(g => [g.id, g]));
+          return sortByTier(prev.map(g => map.has(g.id) ? map.get(g.id) : g));
+        });
+        setProgress({ done: Math.min(i + BATCH, list.length), total: list.length });
+      }
+      setProgress(null);
+    } catch (e) {
+      setLoading(false);
+      setError(e.message || "Something went wrong.");
+      setProgress(null);
     }
   };
 
@@ -511,6 +569,7 @@ function ProtonScan({ themeKey = "hearth", demo = false }) {
             : !hasResults ? <EmptyState mode={mode} />
             : (
               <>
+                {progress && <TierProgress done={progress.done} total={progress.total} />}
                 {mode === "library" && <StatsBar games={games} activeTier={activeTier} onTierClick={setTier} />}
                 <TierFilter games={games} active={activeTier} onChange={setTier} />
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(268px, 1fr))", gap: t.gap }}>
@@ -529,3 +588,6 @@ function ProtonScan({ themeKey = "hearth", demo = false }) {
 }
 
 Object.assign(window, { ProtonScan, PS_THEMES, Tux, TierIcon });
+
+const _psRoot = ReactDOM.createRoot(document.getElementById("root"));
+_psRoot.render(<ProtonScan themeKey="latte" />);
