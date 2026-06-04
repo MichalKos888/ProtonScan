@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://protonscan.m1k0.de/sitemap.xml
